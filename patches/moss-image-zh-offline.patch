@@ -1,0 +1,304 @@
+diff --git a/gradio_app.py b/gradio_app.py
+index 3bdf3f1..736fb7c 100644
+--- a/gradio_app.py
++++ b/gradio_app.py
+@@ -131,7 +131,7 @@ class GenerationConfig:
+ 
+     def validate(self):
+         if not isinstance(self.prompt, str) or not self.prompt.strip():
+-            raise ValueError("Enter a prompt.")
++            raise ValueError("请输入提示词。")
+         for name in ("height", "width", "steps", "seed", "num_images", "max_sequence_length"):
+             value = getattr(self, name)
+             if not isinstance(value, int) or isinstance(value, bool):
+@@ -246,13 +246,13 @@ class ModelRunner:
+             if torch.cuda.is_available():
+                 torch.cuda.empty_cache()
+             mps_runtime.empty_cache()
+-        return "Model released. It will load again on the next generation."
++        return "模型已释放，下次生成时重新加载。"
+ 
+     def generate(self, model, config, progress=None):
+         config.validate()
+         model = model_source(model)
+         if Path(model).is_dir() and not is_model_bundle(Path(model)):
+-            raise ValueError("Choose a complete local model bundle with all five components.")
++            raise ValueError("请选择包含全部五个组件的完整本地模型目录。")
+         with self.lock:
+             config = replace(config, seed=secrets.randbelow(2**32)) if config.seed == -1 else config
+             start = time.monotonic()
+@@ -269,23 +269,23 @@ class ModelRunner:
+                     if timesteps is not None and len(timesteps):
+                         total_steps = len(timesteps)
+                 descriptions = {
+-                    "encode": "Encoding prompt",
+-                    "denoise": f"Sampling · step 0/{total_steps}",
+-                    "decode": "Decoding image",
++                    "encode": "编码提示词",
++                    "denoise": f"采样 · 0/{total_steps} 步",
++                    "decode": "解码图像",
+                 }
+                 report((0, total_steps) if stage == "denoise" else 0, desc=descriptions[stage], unit="steps")
+ 
+             def report_step(pipe, step_index, timestep, callback_kwargs):
+                 completed = step_index + 1
+                 report(
+-                    (completed, total_steps), desc=f"Sampling · step {completed}/{total_steps}", unit="steps"
++                    (completed, total_steps), desc=f"采样 · {completed}/{total_steps} 步", unit="steps"
+                 )
+                 return callback_kwargs
+ 
+             try:
+                 key = (str(model), config.offload, config.compile_transformer)
+                 if key != self.key:
+-                    report(0, desc="Loading model")
++                    report(0, desc="加载模型")
+                     self.unload()
+                     self.pipe = load_pipeline(
+                         model, config.offload, config.compile_transformer, self.local_files_only
+@@ -311,7 +311,7 @@ class ModelRunner:
+                 if self.pipe is not None and self.pipe.transformer is None:
+                     self.unload()
+                 raise
+-            report(0, desc="Saving images and parameters")
++            report(0, desc="保存图像与参数")
+             folder = self.output_dir / uuid4().hex
+             folder.mkdir(parents=True, exist_ok=True)
+             paths = []
+@@ -360,11 +360,11 @@ class ModelRunner:
+             }
+             metadata = folder / "parameters.json"
+             metadata.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n")
+-            report(1, desc="Complete")
++            report(1, desc="完成")
+             return (
+                 paths,
+                 str(metadata),
+-                f"Saved {len(images)} image(s) · seed {config.seed} · {record['elapsed_seconds']:.1f}s",
++                f"已保存 {len(images)} 张 · 种子 {config.seed} · {record['elapsed_seconds']:.1f} 秒",
+             )
+ 
+ 
+@@ -451,24 +451,24 @@ def build_app(
+                         choices=[(Path(p).name, p) for p in choices],
+                         value=initial,
+                         allow_custom_value=True,
+-                        label="Hugging Face model ID or local directory",
++                        label="模型（HF ID 或本地目录）",
+                         scale=3,
+                         min_width=200,
+                     )
+                 with gr.Group():
+                     prompt = gr.Textbox(
+                         value=texts["prompt_prefix"],
+-                        label="Prompt",
++                        label="提示词",
+                         lines=4,
+                         max_lines=8,
+-                        placeholder="Describe your image — subject, light, composition, style…",
++                        placeholder="描述画面：主体、光线、构图、风格…",
+                     )
+                     negative = gr.Textbox(
+                         value=texts["negative_prompt"],
+-                        label="Negative Prompt",
++                        label="负面提示词",
+                         lines=1,
+                         max_lines=3,
+-                        placeholder="What would you like to leave out?",
++                        placeholder="想排除什么？",
+                     )
+                 with gr.Column():
+                     resolution = gr.State(pixels_default)
+@@ -479,7 +479,7 @@ def build_app(
+                             maximum=max_budget,
+                             step=1 / 16,
+                             value=pixels_default / 1048576,
+-                            label="Resolution (M pixels)",
++                            label="分辨率（百万像素）",
+                             scale=3,
+                             min_width=170,
+                         )
+@@ -488,14 +488,14 @@ def build_app(
+                             maximum=8,
+                             step=0.001,
+                             value=width_default / height_default,
+-                            label="Aspect ratio (W/H)",
++                            label="宽高比 (W/H)",
+                             scale=3,
+                             min_width=170,
+                         )
+                         width = gr.Number(
+                             value=width_default,
+                             precision=0,
+-                            label="Width",
++                            label="宽",
+                             minimum=16,
+                             step=16,
+                             scale=1,
+@@ -504,7 +504,7 @@ def build_app(
+                         height = gr.Number(
+                             value=height_default,
+                             precision=0,
+-                            label="Height",
++                            label="高",
+                             minimum=16,
+                             step=16,
+                             scale=1,
+@@ -514,110 +514,110 @@ def build_app(
+                         resolution_choices = gr.Radio(
+                             choices=[(pixel_label(n), n) for n in PIXELS],
+                             value=pixels_default,
+-                            label="Resolution presets",
++                            label="分辨率预设",
+                             scale=5,
+                             min_width=240,
+                         )
+                         aspect_choices = gr.Radio(
+                             choices=list(RATIO_PRESETS),
+                             value=ratio_default if ratio_default in RATIO_PRESETS else None,
+-                            label="Aspect ratio presets",
++                            label="比例预设",
+                             scale=7,
+                             min_width=320,
+                         )
+                     with gr.Row(equal_height=True):
+                         with gr.Column(scale=1, min_width=100):
+-                            count = gr.Number(value=1, precision=0, label="Images", minimum=1)
++                            count = gr.Number(value=1, precision=0, label="张数", minimum=1)
+                         with gr.Column(scale=1, min_width=100):
+-                            random_seed = gr.Button("Random", size="sm", render=False)
++                            random_seed = gr.Button("随机", size="sm", render=False)
+                             seed = gr.Number(
+                                 value=42,
+                                 precision=0,
+-                                label="Seed",
++                                label="种子",
+                                 minimum=-1,
+                                 maximum=2**53 - 1,
+                                 buttons=[random_seed],
+                             )
+                         with gr.Column(scale=1, min_width=100):
+-                            steps = gr.Number(value=defaults.steps, precision=0, minimum=1, label="Steps")
+-                    with gr.Accordion("Advanced settings", open=False):
++                            steps = gr.Number(value=defaults.steps, precision=0, minimum=1, label="步数")
++                    with gr.Accordion("高级设置", open=False):
+                         with gr.Row():
+                             cfg = gr.Number(value=defaults.cfg, label="CFG", minimum=0)
+                             shift = gr.Number(value=defaults.shift, label="Shift", minimum=0.01)
+                         with gr.Row():
+                             offload = gr.Dropdown(
+                                 choices=[("Staged · Apple silicon", "model")] if on_mps else [
+-                                    ("GPU resident", "none"),
+-                                    ("Component", "model"),
+-                                    ("Sequential · fallback", "sequential"),
++                                    ("全部驻留 GPU", "none"),
++                                    ("按组件切换", "model"),
++                                    ("顺序换入（兜底）", "sequential"),
+                                 ],
+                                 value=offload_default,
+                                 interactive=not on_mps,
+-                                label="Memory mode",
++                                label="显存模式",
+                                 scale=2,
+                                 min_width=140,
+                             )
+                             compile_transformer = gr.Checkbox(
+                                 value=False,
+                                 interactive=not on_mps and offload_default != "sequential",
+-                                label="Compile DiT",
++                                label="编译 DiT",
+                                 scale=0,
+                                 min_width=0,
+                             )
+ 
+                         skip_mode = gr.Radio(
+-                            choices=[("Off", "off"), ("Negative-branch skipping", "negative"),
+-                                     ("Standard SLG", "standard")],
++                            choices=[("关闭", "off"), ("负分支跳过", "negative"),
++                                     ("标准 SLG", "standard")],
+                             value="negative",
+-                            label="Skip layer mode",
++                            label="跳层模式",
+                         )
+                         layers = gr.Textbox(
+                             value=defaults.uncond_skip_layers,
+-                            label="Skip layers",
+-                            info="Zero-based layer indices, separated by commas. Empty disables skipping.",
++                            label="跳过层",
++                            info="从 0 开始的层号，逗号分隔；留空=不跳层。",
+                         )
+                         with gr.Row(visible=False) as standard_settings:
+                             slg_layers = gr.Textbox(
+-                                value=defaults.slg_layers, label="SLG layers",
+-                                info="Zero-based layer indices, separated by commas.",
++                                value=defaults.slg_layers, label="SLG 层",
++                                info="从 0 开始的层号，逗号分隔。",
+                             )
+                             slg_scale = gr.Number(value=defaults.slg_scale, minimum=0, label="SLG scale")
+                         with gr.Row() as skip_interval:
+-                            slg_start = gr.Number(value=defaults.slg_start, minimum=0, maximum=1, label="Skip start")
+-                            slg_stop = gr.Number(value=defaults.slg_stop, minimum=0, maximum=1, label="Skip stop")
++                            slg_start = gr.Number(value=defaults.slg_start, minimum=0, maximum=1, label="跳层起点")
++                            slg_stop = gr.Number(value=defaults.slg_stop, minimum=0, maximum=1, label="跳层终点")
+             with gr.Column(scale=2):
+                 gallery = gr.Gallery(label="生成结果", columns=2, scale=1, object_fit="contain")
+-                status = gr.Textbox(label="Status", interactive=False, scale=0)
++                status = gr.Textbox(label="状态", interactive=False, scale=0)
+         with gr.Row():
+             with gr.Column(scale=3, min_width=640):
+-                generate = gr.Button("Generate", variant="primary")
++                generate = gr.Button("生成", variant="primary")
+             gr.Column(scale=2)
+-        gr.Markdown("## Examples")
++        gr.Markdown("## 示例")
+         with gr.Row(equal_height=False):
+             with gr.Column(scale=3, min_width=360):
+                 examples = gr.Gallery(
+                     value=initial_assets["images"],
+-                    label="Examples",
++                    label="示例库",
+                     columns=4,
+                     object_fit="contain",
+                     interactive=False,
+                 )
+             with gr.Column(scale=2, min_width=300):
+                 example_prompt = gr.Textbox(
+-                    label="Original Prompt",
++                    label="原始提示词",
+                     lines=5,
+                     max_lines=8,
+                     interactive=False,
+-                    placeholder="Click an image to view its original prompt.",
++                    placeholder="点击示例图查看原始提示词。",
+                 )
+                 example_negative = gr.Textbox(
+-                    label="Negative Prompt",
++                    label="负面提示词",
+                     lines=1,
+                     max_lines=3,
+                     interactive=False,
+                 )
+                 example_settings = gr.Textbox(
+-                    label="Original settings",
++                    label="原始参数",
+                     lines=2,
+                     max_lines=3,
+                     interactive=False,
+diff --git a/inference_runtime.py b/inference_runtime.py
+index 913444e..d69b80f 100644
+--- a/inference_runtime.py
++++ b/inference_runtime.py
+@@ -25,9 +25,11 @@ def model_source(model):
+ 
+ 
+ def load_pipeline(model, local_files_only=False):
++    root = model_source(model)
++    local_pipeline = str(Path(root) / "pipeline_moss_image.py")
+     return diffusers.DiffusionPipeline.from_pretrained(
+-        model_source(model),
+-        custom_pipeline="pipeline_moss_image",
++        root,
++        custom_pipeline=local_pipeline,
+         trust_remote_code=True,
+         local_files_only=local_files_only,
+         torch_dtype={"default": torch.bfloat16, "vae": torch.float32},
